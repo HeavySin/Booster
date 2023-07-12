@@ -12,3 +12,6 @@ By aggregating a wide range of helper functionalities and incorporating curated 
 > - **Header-Only**
 > - **Customization and Configuration**
 > - **Helper Functionalities**
+
+
+###### This project is the result of three straight days of coding, so apologies for any unintentional mistakes, bugs, poor documentation, or design patterns.
