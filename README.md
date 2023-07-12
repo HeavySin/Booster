@@ -13,5 +13,8 @@ By aggregating a wide range of helper functionalities and incorporating curated 
 > - **Customization and Configuration**
 > - **Helper Functionalities**
 
+## Third-Party libraries used in this project
+- [RapidJson](https://github.com/Tencent/rapidjson)
+
 
 ###### This project is the result of three straight days of coding, so apologies for any unintentional mistakes, bugs, poor documentation, or design patterns.
