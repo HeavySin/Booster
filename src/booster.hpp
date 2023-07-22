@@ -419,7 +419,7 @@ namespace TypeManipulators {
             return static_cast<typename std::underlying_type<E>::type>(e);
         }
 
-        template<typename TInput, typename TResult>
+        template<typename TResult, typename TInput>
         requires std::is_enum<TInput>::value
         inline constexpr TResult EnumValue(TInput enumArg) {
             return static_cast<TResult>(enumArg);
