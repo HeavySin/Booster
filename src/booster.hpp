@@ -182,9 +182,9 @@ namespace CLI {
     }
 
     std::vector<int32_t> PrintTable(const std::vector<std::string> &tableItems,
-                                           bool tableAtExit = true,
-                                           bool tableAtBack = false,
-                                           bool tableBottomPadding = true) {
+                                    bool tableAtExit = true,
+                                    bool tableAtBack = false,
+                                    bool tableBottomPadding = true) {
 
         int32_t tableItemPtr{0};
         std::vector<int32_t> tableItemsRange;
@@ -412,6 +412,20 @@ namespace STLManipulators {
     bool Contains(C &&c, T e) { return std::find(std::begin(c), std::end(c), e) != std::end(c); };
 }
 
+namespace TypeManipulators {
+    namespace EnumManipulators {
+        template<typename E>
+        constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {
+            return static_cast<typename std::underlying_type<E>::type>(e);
+        }
+
+        template<typename TInput, typename TResult>
+        requires std::is_enum<TInput>::value
+        inline constexpr TResult EnumValue(TInput enumArg) {
+            return static_cast<TResult>(enumArg);
+        }
+    }
+}
 
 namespace StringManipulators {
     template<typename ... Args>
