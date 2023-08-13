@@ -2,12 +2,18 @@
 #define BOOSTER_HPP
 
 #include <filesystem>
+#include <algorithm>
+#include <random>
 #include <exception>
 #include <iostream>
 #include <ranges>
 #include <limits>
 #include <cmath>
+#include <fcntl.h>
 #include <sys/stat.h>
+
+// STL
+#include <vector>
 
 // Streams
 #include <fstream>
@@ -38,181 +44,209 @@ const char FLUSH_TERMINAL[] = "cls";
 #else
 #endif
 
-
-namespace BoosterException {
-    // Additional Exception type for handling both function return type and error handling
+namespace Booster {
+    namespace BoosterException {
+        // Additional Exception type for handling both function return type and error handling
 //    template<typename T1 /* Function ReturnType */, typename T2 /* ErrorException */>
 //    class ExceptionContainer : public std::pair<T1, T2> {
 //    public:
 //        std::pair<T1, T2> _pair;
 //    };
 
-    class InputOutput : std::exception {
-    public:
-        enum InputOutputException {
-            Success,
-            OperationFailed,
-            FileNotFound,
-            AccessDenied,
-            InvalidHandler,
-            FailedToSetFilePointer,
-            FailedToGetFileSize,
-            FailedToWrite,
-            FailedToRead,
+        class InputOutput : std::exception {
+        public:
+            enum InputOutputException {
+                Success,
+                OperationFailed,
+                FileNotFound,
+                AccessDenied,
+                InvalidHandler,
+                FailedToSetFilePointer,
+                FailedToGetFileSize,
+                FailedToWrite,
+                FailedToRead,
+            };
+
+            InputOutputException exception;
+
+            explicit InputOutput(InputOutputException exceptionArg) : exception(exceptionArg) {}
         };
-
-        InputOutputException exception;
-
-        explicit InputOutput(InputOutputException exceptionArg) : exception(exceptionArg) {}
-    };
-}
-
-namespace System {
-    bool exec(const char commandArg[]) {
-        return system(commandArg);
     }
-}
 
-namespace Parsers {
-    int TryParseInt0(const std::string &input) {
-        try {
-            return std::stoi(input);
-        } catch (std::exception &exception) {
-            return -1;
+    namespace System {
+        bool exec(const char commandArg[]) {
+            return system(commandArg);
         }
     }
 
-    bool TryParseInt1(const std::string &input, int &output) {
-        try {
-            output = std::stoi(input);
-        } catch (std::invalid_argument &invalidArgument) {
-            return false;
-        }
-        return true;
-    }
-}
-
-namespace Getters {
-    std::string ReadLine(const std::string &placeholderArg = "") {
-        std::string retrievedLineHolder;
-        std::cout << placeholderArg << std::flush;
-        if (!getline(std::cin, retrievedLineHolder)) {
-            return "<error>";
-        }
-        return retrievedLineHolder;
-    }
-
-    char ReadChar(void) {
-        char tempChar;
-        std::cin.get(tempChar);
-        return tempChar;
-    }
-}
-
-namespace CLI {
-    void ConsoleOut(const std::basic_string<char> &inputMessageArg) {
-        std::cout << inputMessageArg << std::endl;
-    }
-
-    void ConsoleOutFlush(const std::string &inputMessageArg) {
-        std::cout << inputMessageArg << std::flush;
-    }
-
-    namespace Halts {
-        std::string haltDefaultMessage{"Press enter to continue..."};
-
-        void
-        PressXTo0(const char &pressXArg = '\n', const std::string &haltMessageArg = CLI::Halts::haltDefaultMessage) {
-            CLI::ConsoleOutFlush(haltMessageArg);
-            while (Getters::ReadChar() != pressXArg);
-        }
-
-        void
-        PressXTo1(const char &pressXArg = '\n', const std::string &haltMessageArg = CLI::Halts::haltDefaultMessage) {
-            CLI::ConsoleOutFlush(haltMessageArg);
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), pressXArg);
-        }
-
-        void PressAnyTo(const std::string &haltMessageArg = CLI::Halts::haltDefaultMessage) {
-            CLI::ConsoleOutFlush(haltMessageArg);
-            std::cin.ignore();
-        }
-
-        void PressEnterTo(const std::string &haltActionMessageArg = "continue...") {
-            PressAnyTo("\nPress Enter to " + haltActionMessageArg);
-        }
-    }
-
-    namespace Manipulators {
-        namespace Screen {
-            void FlushScreen0(void) {
-                std::cout << "\033[2J\033[1;1H" << std::endl;
-            }
-
-            void FlushScreen1(void) {
-                System::exec(FLUSH_TERMINAL);
+    namespace Parsers {
+        int TryParseInt0(const std::string &input) {
+            try {
+                return std::stoi(input);
+            } catch (std::exception &exception) {
+                return -1;
             }
         }
-    }
 
-    void PrintTitle(const std::string &titleMessageArg,
-                    bool titleBottomPaddingArg = true,
-                    const std::string &titleCharArg = "-",
-                    bool titleSpaceArg = true,
-                    bool flushScreenArg = true,
-                    uint8_t titleDiameterArg = 18) {
-        if (flushScreenArg) {
-            CLI::Manipulators::Screen::FlushScreen1();
-        }
-        std::string titleSide;
-        for (uint8_t titleDiameterCounter{0};
-             titleDiameterCounter <= titleDiameterArg; ++titleDiameterCounter) {
-            titleSide.append(titleCharArg);
-        }
-
-        if (titleSpaceArg) {
-            CLI::ConsoleOut(titleSide + ' ' + '[' + titleMessageArg + ']' + ' ' + titleSide);
-        } else {
-            CLI::ConsoleOut(titleSide + '[' + titleMessageArg + ']' + titleSide);
-        }
-
-        if (titleBottomPaddingArg) {
-            CLI::ConsoleOut("\n");
+        bool TryParseInt1(const std::string &input, int &output) {
+            try {
+                output = std::stoi(input);
+            } catch (std::invalid_argument &invalidArgument) {
+                return false;
+            }
+            return true;
         }
     }
 
-    std::vector<int32_t> PrintTable(const std::vector<std::string> &tableItems,
-                                    bool tableAtExit = true,
-                                    bool tableAtBack = false,
-                                    bool tableBottomPadding = true) {
-
-        int32_t tableItemPtr{0};
-        std::vector<int32_t> tableItemsRange;
-        for (const std::string &tableItem: tableItems) {
-            std::cout << '[' << ++tableItemPtr << ']' << ' ' << tableItem << std::endl;
-            tableItemsRange.push_back(tableItemPtr);
-        }
-        if (tableAtExit) {
-            std::cout << "[0] EXIT" << std::endl;
-            tableItemsRange.push_back(0);
+    namespace Getters {
+        std::string ReadLine(const std::string &placeholderArg = "") {
+            std::string retrievedLineHolder;
+            std::cout << placeholderArg << std::flush;
+            if (!getline(std::cin, retrievedLineHolder)) {
+                return "<error>";
+            }
+            return retrievedLineHolder;
         }
 
-        if (tableAtBack) {
-            std::cout << '[' << ++tableItemPtr << ']' << ' ' << "BACK" << std::endl;
-            tableItemsRange.push_back(tableItemPtr);
+        char ReadChar(void) {
+            char tempChar;
+            std::cin.get(tempChar);
+            return tempChar;
         }
-
-        if (tableBottomPadding) {
-            CLI::ConsoleOut("\n");
-        }
-
-        return tableItemsRange;
     }
-}
 
+    namespace CLI {
+        void ConsoleOut(const std::basic_string<char> &inputMessageArg) {
+            std::cout << inputMessageArg << std::endl;
+        }
 
-namespace System {
-    std::string GetLastErrorAsString(void) {
+        void ConsoleOutFlush(const std::string &inputMessageArg) {
+            std::cout << inputMessageArg << std::flush;
+        }
+
+        namespace Halts {
+            std::string haltDefaultMessage{"Press enter to continue..."};
+
+            void
+            PressXTo0(const char &pressXArg = '\n',
+                      const std::string &haltMessageArg = CLI::Halts::haltDefaultMessage) {
+                CLI::ConsoleOutFlush(haltMessageArg);
+                while (Getters::ReadChar() != pressXArg);
+            }
+
+            void
+            PressXTo1(const char &pressXArg = '\n',
+                      const std::string &haltMessageArg = CLI::Halts::haltDefaultMessage) {
+                CLI::ConsoleOutFlush(haltMessageArg);
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), pressXArg);
+            }
+
+            void PressAnyTo(const std::string &haltMessageArg = CLI::Halts::haltDefaultMessage) {
+                CLI::ConsoleOutFlush(haltMessageArg);
+                std::cin.ignore();
+            }
+
+            void PressEnterTo(const std::string &haltActionMessageArg = "continue...") {
+                PressAnyTo("\nPress Enter to " + haltActionMessageArg);
+            }
+        }
+
+        namespace Manipulators {
+            namespace Screen {
+                void FlushScreen0(void) {
+                    std::cout << "\033[2J\033[1;1H" << std::endl;
+                }
+
+                void FlushScreen1(void) {
+                    System::exec(FLUSH_TERMINAL);
+                }
+            }
+        }
+
+        void PrintTitle(const std::string &titleMessageArg,
+                        bool titleBottomPaddingArg = true,
+                        const std::string &titleCharArg = "-",
+                        bool titleSpaceArg = true,
+                        bool flushScreenArg = true,
+                        uint8_t titleDiameterArg = 18) {
+            if (flushScreenArg) {
+                CLI::Manipulators::Screen::FlushScreen1();
+            }
+            std::string titleSide;
+            for (uint8_t titleDiameterCounter{0};
+                 titleDiameterCounter <= titleDiameterArg; ++titleDiameterCounter) {
+                titleSide.append(titleCharArg);
+            }
+
+            if (titleSpaceArg) {
+                CLI::ConsoleOut(titleSide + ' ' + '[' + titleMessageArg + ']' + ' ' + titleSide);
+            } else {
+                CLI::ConsoleOut(titleSide + '[' + titleMessageArg + ']' + titleSide);
+            }
+
+            if (titleBottomPaddingArg) {
+                CLI::ConsoleOut("\n");
+            }
+        }
+
+        std::vector<int32_t> PrintTable(const std::vector<std::string> &tableItems,
+                                        bool tableAtExit = true,
+                                        bool tableAtBack = false,
+                                        bool tableBottomPadding = true) {
+
+            int32_t tableItemPtr{0};
+            std::vector<int32_t> tableItemsRange;
+            for (const std::string &tableItem: tableItems) {
+                std::cout << '[' << ++tableItemPtr << ']' << ' ' << tableItem << std::endl;
+                tableItemsRange.push_back(tableItemPtr);
+            }
+            if (tableAtExit) {
+                std::cout << "[0] EXIT" << std::endl;
+                tableItemsRange.push_back(0);
+            }
+
+            if (tableAtBack) {
+                std::cout << '[' << ++tableItemPtr << ']' << ' ' << "BACK" << std::endl;
+                tableItemsRange.push_back(tableItemPtr);
+            }
+
+            if (tableBottomPadding) {
+                CLI::ConsoleOut("\n");
+            }
+
+            return tableItemsRange;
+        }
+    }
+
+    namespace Generators {
+        namespace Random {
+            namespace strings {
+                std::string
+                randomNumberGen1(const uint32_t randomNumberLengthArg = 32, const bool startsWithZero = false) {
+                    uint32_t randomNumberLengthTemp{randomNumberLengthArg};
+                    std::string generatedNumberHolder;
+                    std::random_device randomSeed;
+                    std::mt19937 gen(randomSeed());
+                    std::uniform_int_distribution dist(0, 9);
+                    if (!startsWithZero) {
+                        generatedNumberHolder += std::to_string(std::uniform_int_distribution(1, 9)(gen));
+                        randomNumberLengthTemp -= 1;
+                    }
+
+                    for (int i = 0; i < randomNumberLengthTemp; ++i) {
+                        generatedNumberHolder += std::to_string(dist(gen));
+                    }
+
+                    return generatedNumberHolder;
+                }
+            }
+        }
+    }
+
+    namespace System {
+#ifdef PLATFORM_WINDOWS
+
+        std::string GetLastErrorAsString(void) {
         DWORD lastErrorCode = GetLastError();
         if (lastErrorCode == 0) {
             return "NO_ERROR";
@@ -225,11 +259,12 @@ namespace System {
         LocalFree(messageBuffer);
         return message;
     }
+#endif
 
-    namespace Handlers {
+        namespace Handlers {
 #ifdef PLATFORM_WINDOWS
 
-        bool checkForFileHandle(const void *fileHandle_arg, bool shutErrors_arg = true) {
+            bool checkForFileHandle(const void *fileHandle_arg, bool shutErrors_arg = true) {
             if (fileHandle_arg == INVALID_HANDLE_VALUE) {
                 if (!shutErrors_arg)
                     CLI::ConsoleOut("Failed to open the HANDLE drive: " + std::string(System::GetLastErrorAsString()));
@@ -256,20 +291,20 @@ namespace System {
 
 #endif /* System::Handlers -> checkForFileHandle : checkForDiskGeometry : GetDeviceBytesPerSector - [PLATFORM_WINDOWS]  */
 
-    }
-
-    namespace Sleeps {
-        void SleepForMillisecond(const uint64_t milliseconds_arg) {
-#ifdef PLATFORM_WINDOWS
-            Sleep(milliseconds_arg);
-#elif defined(PLATFORM_POSIX)
-            usleep(milliseconds_arg * 1000);
-#endif
         }
-    }
+
+        namespace Sleeps {
+            void SleepForMillisecond(const uint64_t milliseconds_arg) {
+#ifdef PLATFORM_WINDOWS
+                Sleep(milliseconds_arg);
+#elif defined(PLATFORM_POSIX)
+                usleep(milliseconds_arg * 1000);
+#endif
+            }
+        }
 #ifdef PLATFORM_WINDOWS
 
-    std::pair<bool, DISK_GEOMETRY> GetDiskGeometry(void *fileHandle_arg, bool closeHandleArg = false) {
+        std::pair<bool, DISK_GEOMETRY> GetDiskGeometry(void *fileHandle_arg, bool closeHandleArg = false) {
         DISK_GEOMETRY diskGeometry;
         DWORD bytesReturned;
 
@@ -304,33 +339,33 @@ namespace System {
 #endif /* System -> GetLastErrorAsString - [PLATFORM_WINDOWS] */
 
 
-    namespace Users {
-        std::string UsernameGetter0(void) {
+        namespace Users {
+            std::string UsernameGetter0(void) {
 #ifdef PLATFORM_POSIX
-            uid_t userid;
-            struct passwd* pwd;
-            userid = getuid();
-            pwd = getpwuid(userid);
-            return pwd->pw_name;
+                uid_t userid;
+                struct passwd *pwd;
+                userid = getuid();
+                pwd = getpwuid(userid);
+                return pwd->pw_name;
 #elifdef PLATFORM_WINDOWS
-            char szBuffer[MAX_USERNAME_LENGTH];
+                char szBuffer[MAX_USERNAME_LENGTH];
             DWORD len = MAX_USERNAME_LENGTH;
             if (GetUserName(szBuffer, &len))
                 return szBuffer;
 #else
             return getenv("username");
 #endif
+            }
+
+            std::string UsernameGetter1(void) {
+                return getenv("username");
+            }
         }
 
-        std::string UsernameGetter1(void) {
-            return getenv("username");
-        }
-    }
-
-    namespace Paths {
+        namespace Paths {
 #ifdef PLATFORM_WINDOWS
 
-        std::string GetAppDataDirectory0(const std::string &username_arg = System::Users::UsernameGetter0()) {
+            std::string GetAppDataDirectory0(const std::string &username_arg = System::Users::UsernameGetter0()) {
             return "C:\\Users\\" + username_arg + "\\AppData\\Roaming";
         }
 
@@ -344,281 +379,342 @@ namespace System {
 
 #endif /* IOManipulators::FileManipulators::Paths -> GetAppDataDirectoryX - [PLATFORM_WINDOWS] */
 
-    }
-
-    std::string ExecuteCommand(const std::string &command_arg, const short int bufferSize_arg = 128) {
-        FILE *pipe = popen(command_arg.c_str(), "r");
-        if (!pipe) {
-            std::cerr << "Error executing command." << std::endl;
-            return "<null>";
         }
 
-        const short int bufferSize = bufferSize_arg;
-        char charBuffer[bufferSize];
-        std::string stringBuffer;
-        while (fgets(charBuffer, bufferSize, pipe) != nullptr) {
-            stringBuffer.append(charBuffer);
-        }
-        pclose(pipe);
-
-        return stringBuffer;
-    }
-}
-
-namespace CLI {
-    namespace Sleeps {
-        void Countdown(uint32_t secondsArg, const std::string &countdownMessageArg) {
-            for (uint64_t counter{0}; counter < secondsArg; counter++) {
-                std::cout << '\r' << countdownMessageArg << (secondsArg - counter) << " seconds."
-                          << (secondsArg > 10 ? "\t\t" : "") << std::flush;
-                System::Sleeps::SleepForMillisecond(1000);
-
+        std::string ExecuteCommand(const std::string &command_arg, const short int bufferSize_arg = 128) {
+            FILE *pipe = popen(command_arg.c_str(), "r");
+            if (!pipe) {
+                std::cerr << "Error executing command." << std::endl;
+                return "<null>";
             }
-            std::cout << '\r' << std::string(128, ' ') << '\r' << std::flush;
+
+            const short int bufferSize = bufferSize_arg;
+            char charBuffer[bufferSize];
+            std::string stringBuffer;
+            while (fgets(charBuffer, bufferSize, pipe) != nullptr) {
+                stringBuffer.append(charBuffer);
+            }
+            pclose(pipe);
+
+            return stringBuffer;
         }
     }
 
-    void NotFound(const std::string &notFoundArg,
-                  bool topPaddingArg = true,
-                  bool bottomPaddingArg = false,
-                  const std::string &notFoundMessageArg = "not found",
-                  uint32_t sleepForMillisecondsArg = 800) {
+    namespace CLI {
+        namespace Sleeps {
+            void Countdown(uint32_t secondsArg, const std::string &countdownMessageArg) {
+                for (uint64_t counter{0}; counter < secondsArg; counter++) {
+                    std::cout << '\r' << countdownMessageArg << (secondsArg - counter) << " seconds."
+                              << (secondsArg > 10 ? "\t\t" : "") << std::flush;
+                    System::Sleeps::SleepForMillisecond(1000);
 
-        if (!notFoundArg.empty()) {
-            CLI::ConsoleOut((topPaddingArg ? "\n\"" : "\"") + notFoundArg + "\" " + notFoundMessageArg +
-                            (bottomPaddingArg ? "\n" : ""));
-            System::Sleeps::SleepForMillisecond(sleepForMillisecondsArg);
-        }
-    }
-
-
-    std::string GetCommandLineHolder(const std::string &hostnameArg,
-                                     const std::string &usernameArg = System::Users::UsernameGetter0()) {
-        return usernameArg + '@' + hostnameArg + " ~ $ ";
-    }
-
-    static std::string GetPanelPathHolder(const std::vector<std::string> &pathsArg) {
-        std::string pathHolder;
-        for (const std::string &path: pathsArg) {
-            pathHolder.append(pathHolder.empty() ? "" : ">" + path);
-        }
-        return pathHolder;
-    }
-}
-
-
-namespace STLManipulators {
-    template<class C, typename T>
-    bool Contains(C &&c, T e) { return std::find(std::begin(c), std::end(c), e) != std::end(c); };
-}
-
-namespace TypeManipulators {
-    namespace EnumManipulators {
-        template<typename E>
-        constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {
-            return static_cast<typename std::underlying_type<E>::type>(e);
-        }
-
-        template<typename TResult, typename TInput>
-        requires std::is_enum<TInput>::value
-        inline constexpr TResult EnumValue(TInput enumArg) {
-            return static_cast<TResult>(enumArg);
-        }
-    }
-}
-
-namespace StringManipulators {
-    template<typename ... Args>
-    std::string Format(const std::string &format, Args ... args) {
-        int size_s = std::snprintf(nullptr, 0, format.c_str(), args ...) + 1;
-        if (size_s <= 0) { throw std::runtime_error("Error during formatting."); }
-        auto size = static_cast<size_t>( size_s );
-        std::unique_ptr<char[]> buf(new char[size]);
-        std::snprintf(buf.get(), size, format.c_str(), args ...);
-        return std::string(buf.get(), buf.get() + size - 1);
-    }
-
-    namespace Convertors {
-        namespace HexToText {
-            std::string HexToString0(const std::string &hexArg) {
-                std::string output;
-                std::stringstream stream(hexArg);
-                stream >> std::hex;
-                while (!stream.eof()) {
-                    unsigned int value;
-                    stream >> value;
-                    output += static_cast<char>(value);
                 }
-                return output;
+                std::cout << '\r' << std::string(128, ' ') << '\r' << std::flush;
+            }
+        }
+
+        void NotFound(const std::string &notFoundArg,
+                      bool topPaddingArg = true,
+                      bool bottomPaddingArg = false,
+                      const std::string &notFoundMessageArg = "not found",
+                      uint32_t sleepForMillisecondsArg = 800) {
+
+            if (!notFoundArg.empty()) {
+                CLI::ConsoleOut((topPaddingArg ? "\n\"" : "\"") + notFoundArg + "\" " + notFoundMessageArg +
+                                (bottomPaddingArg ? "\n" : ""));
+                System::Sleeps::SleepForMillisecond(sleepForMillisecondsArg);
+            }
+        }
+
+
+        std::string GetCommandLineHolder(const std::string &hostnameArg,
+                                         const std::string &usernameArg = System::Users::UsernameGetter0()) {
+            return usernameArg + '@' + hostnameArg + " ~ $ ";
+        }
+
+        static std::string GetPanelPathHolder(const std::vector<std::string> &pathsArg) {
+            std::string pathHolder;
+            for (const std::string &path: pathsArg) {
+                pathHolder.append(pathHolder.empty() ? "" : ">" + path);
+            }
+            return pathHolder;
+        }
+    }
+
+
+    namespace STLManipulators {
+        template<class C, typename T>
+        bool Contains(C &&c, T e) { return std::find(std::begin(c), std::end(c), e) != std::end(c); };
+    }
+
+    namespace TypeManipulators {
+        namespace EnumManipulators {
+            template<typename E>
+            constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {
+                return static_cast<typename std::underlying_type<E>::type>(e);
             }
 
-            std::string HexToString1(const std::string &hexArg) {
-                std::string output;
-                for (size_t i = 0; i < hexArg.length(); i += 2) {
-                    std::string hexByte = hexArg.substr(i, 2);
-                    unsigned char byte = static_cast<unsigned char>(std::stoi(hexByte, nullptr, 16));
-                    output.push_back(byte);
-                }
-                return output;
+            template<typename TResult, typename TInput>
+            requires std::is_enum<TInput>::value
+            inline constexpr TResult EnumValue(TInput enumArg) {
+                return static_cast<TResult>(enumArg);
             }
+        }
+    }
 
-            std::string HexToString2(const std::string &hexArg) {
-                std::string output;
+    namespace StringManipulators {
+        template<typename ... Args>
+        std::string Format(const std::string &format, Args ... args) {
+            int size_s = std::snprintf(nullptr, 0, format.c_str(), args ...) + 1;
+            if (size_s <= 0) { throw std::runtime_error("Error during formatting."); }
+            auto size = static_cast<size_t>( size_s );
+            std::unique_ptr<char[]> buf(new char[size]);
+            std::snprintf(buf.get(), size, format.c_str(), args ...);
+            return std::string(buf.get(), buf.get() + size - 1);
+        }
 
-                if ((output.length() % 2) != 0) {
+        namespace Convertors {
+            namespace HexToText {
+                std::string HexToString0(const std::string &hexArg) {
+                    std::string output;
+                    std::stringstream stream(hexArg);
+                    stream >> std::hex;
+                    while (!stream.eof()) {
+                        unsigned int value;
+                        stream >> value;
+                        output += static_cast<char>(value);
+                    }
                     return output;
                 }
 
-                size_t cnt = output.length() / 2;
-
-                for (size_t i = 0; cnt > i; ++i) {
-                    uint32_t s = 0;
-                    std::stringstream ss;
-                    ss << std::hex << output.substr(i * 2, 2);
-                    ss >> s;
-
-                    output.push_back(static_cast<unsigned char>(s));
+                std::string HexToString1(const std::string &hexArg) {
+                    std::string output;
+                    for (size_t i = 0; i < hexArg.length(); i += 2) {
+                        std::string hexByte = hexArg.substr(i, 2);
+                        unsigned char byte = static_cast<unsigned char>(std::stoi(hexByte, nullptr, 16));
+                        output.push_back(byte);
+                    }
+                    return output;
                 }
 
-                return output;
-            }
-        }
-        namespace TextToHex {
-            std::string StringToHex0(const std::string &textArg) {
-                std::stringstream stream;
-                for (char c: textArg)
-                    stream << std::hex << static_cast<int>(c);
-                return stream.str();
-            }
+                std::string HexToString2(const std::string &hexArg) {
+                    std::string output;
 
-            std::string StringToHex1(const std::string &input) {
-                std::stringstream hexStream;
-                hexStream << std::hex << std::setfill('0');
+                    if ((output.length() % 2) != 0) {
+                        return output;
+                    }
 
-                for (char ch: input) {
-                    hexStream << std::setw(2) << static_cast<unsigned char>(ch);
+                    size_t cnt = output.length() / 2;
+
+                    for (size_t i = 0; cnt > i; ++i) {
+                        uint32_t s = 0;
+                        std::stringstream ss;
+                        ss << std::hex << output.substr(i * 2, 2);
+                        ss >> s;
+
+                        output.push_back(static_cast<unsigned char>(s));
+                    }
+
+                    return output;
+                }
+            }
+            namespace TextToHex {
+                std::string StringToHex0(const std::string &textArg) {
+                    std::stringstream stream;
+                    for (char c: textArg)
+                        stream << std::hex << static_cast<int>(c);
+                    return stream.str();
                 }
 
-                return hexStream.str();
-            }
+                std::string StringToHex1(const std::string &input) {
+                    std::stringstream hexStream;
+                    hexStream << std::hex << std::setfill('0');
 
-            std::string StringToHex2(const std::string &input) {
-                std::stringstream hexStream;
-                hexStream << std::hex << std::setfill('0');
+                    for (char ch: input) {
+                        hexStream << std::setw(2) << static_cast<unsigned char>(ch);
+                    }
 
-                for (char ch: input) {
-                    hexStream << std::setw(2) << static_cast<unsigned int>(static_cast<unsigned char>(ch));
+                    return hexStream.str();
                 }
 
-                return hexStream.str();
+                std::string StringToHex2(const std::string &input) {
+                    std::stringstream hexStream;
+                    hexStream << std::hex << std::setfill('0');
+
+                    for (char ch: input) {
+                        hexStream << std::setw(2) << static_cast<unsigned int>(static_cast<unsigned char>(ch));
+                    }
+
+                    return hexStream.str();
+                }
+
+                uint64_t StringToNumeric(const std::string &hexString) {
+                    std::istringstream converter(hexString);
+                    uint64_t numericValue;
+
+                    converter >> std::hex >> numericValue;
+
+                    return numericValue;
+                }
+            }
+        }
+
+        namespace Replace {
+            void ReplaceAll(std::string &source, const std::string &from, const std::string &to = "") {
+                std::string newString;
+                newString.reserve(source.length());  // avoids a few memory allocations
+
+                std::string::size_type lastPos = 0;
+                std::string::size_type findPos;
+
+                while (std::string::npos != (findPos = source.find(from, lastPos))) {
+                    newString.append(source, lastPos, findPos - lastPos);
+                    newString += to;
+                    lastPos = findPos + from.length();
+                }
+
+                // Care for the rest after last occurrence
+                newString += source.substr(lastPos);
+
+                source.swap(newString);
+            }
+        }
+
+        namespace Trim {
+
+            // trim from left
+            inline std::string &ltrim(std::string &s, const char *t = " \t\n\r\f\v") {
+                s.erase(0, s.find_first_not_of(t));
+                return s;
+            }
+
+            // trim from right
+            inline std::string &rtrim(std::string &s, const char *t = " \t\n\r\f\v") {
+                s.erase(s.find_last_not_of(t) + 1);
+                return s;
+            }
+
+            // trim from left & right
+            inline std::string &trim(std::string &s, const char *t = " \t\n\r\f\v") {
+                return ltrim(rtrim(s, t), t);
+            }
+
+            // copying versions
+            inline std::string ltrim_copy(std::string s, const char *t = " \t\n\r\f\v") {
+                return ltrim(s, t);
+            }
+
+            inline std::string rtrim_copy(std::string s, const char *t = " \t\n\r\f\v") {
+                return rtrim(s, t);
+            }
+
+            inline std::string trim_copy(std::string s, const char *t = " \t\n\r\f\v") {
+                return trim(s, t);
+            }
+        }
+
+        namespace Split {
+            std::vector<std::string>
+            split0(const std::string &s, const std::string &delimiter, const bool removeEmptyEntries = false) {
+                std::vector<std::string> tokens;
+
+                for (size_t start = 0, end; start < s.length(); start = end + delimiter.length()) {
+                    size_t position = s.find(delimiter, start);
+                    end = position != std::string::npos ? position : s.length();
+
+                    std::string token = s.substr(start, end - start);
+                    if (!removeEmptyEntries || !token.empty()) {
+                        tokens.push_back(token);
+                    }
+                }
+
+                if (!removeEmptyEntries &&
+                    (s.empty() || s.ends_with(delimiter))) {
+                    tokens.emplace_back("");
+                }
+
+                return tokens;
+            }
+        }
+
+        namespace Occurrence {
+            uint64_t occurrence0(const std::string &text_arg, const char &atCheck_arg) {
+                return std::count(text_arg.begin(), text_arg.end(), atCheck_arg);
             }
         }
     }
 
-    namespace Replace {
-        void ReplaceAll(std::string &source, const std::string &from, const std::string &to = "") {
-            std::string newString;
-            newString.reserve(source.length());  // avoids a few memory allocations
+    namespace IntManipulators {
+        namespace Rounds {
+            double RoundX(double valueArg, int decimalPlacesArg = 2) {
+                const double multiplier = std::pow(10.0, decimalPlacesArg);
+                return std::ceil(valueArg * multiplier) / multiplier;
+            }
+        }
 
-            std::string::size_type lastPos = 0;
-            std::string::size_type findPos;
 
-            while (std::string::npos != (findPos = source.find(from, lastPos))) {
-                newString.append(source, lastPos, findPos - lastPos);
-                newString += to;
-                lastPos = findPos + from.length();
+        namespace LeadingZero {
+            std::string RemoveLeadingZeroPrecision(long double inputArg) {
+                std::ostringstream ostringstream;
+                ostringstream << inputArg;
+                return ostringstream.str();
             }
 
-            // Care for the rest after last occurrence
-            newString += source.substr(lastPos);
+            std::string AddLeadingZeroPrecision(uint64_t numArg, uint16_t leadingZerosArg) {
+                return std::to_string(numArg).insert(0, leadingZerosArg, '0');
+            }
+        }
 
-            source.swap(newString);
+        namespace Convertors {
+            std::string ConvertByte(int64_t bytesArg, int decimalPlacesArg = 2) {
+                long gb = 1024 * 1024 * 1024;
+                long mb = 1024 * 1024;
+                long kb = 1024;
+
+                std::string KB{IntManipulators::LeadingZero::RemoveLeadingZeroPrecision(
+                        IntManipulators::Rounds::RoundX((double) bytesArg / kb, decimalPlacesArg))};
+                std::string MB{IntManipulators::LeadingZero::RemoveLeadingZeroPrecision(
+                        IntManipulators::Rounds::RoundX((double) bytesArg / mb, decimalPlacesArg))};
+                std::string GB{IntManipulators::LeadingZero::RemoveLeadingZeroPrecision(
+                        IntManipulators::Rounds::RoundX((double) bytesArg / gb, decimalPlacesArg))};
+                if (bytesArg >= gb) {
+                    return GB + " GB";
+                } else if (bytesArg >= mb) {
+                    return MB + " MB";
+                } else if (bytesArg >= kb) {
+                    return KB + " KB";
+                } else { return std::to_string(bytesArg) + " B"; }
+            }
+
+
+            namespace Colors {
+                struct RGB_CONTAINER {
+                public:
+                    const int32_t HEX;
+                    int32_t R{256};
+                    int32_t G{256};
+                    int32_t B{256};
+
+                    explicit RGB_CONTAINER(int32_t hexValueArg = 0x000000)
+                            : HEX(hexValueArg),
+                              R((((hexValueArg >> 16) & 0xFF) / 255)),
+                              G((((hexValueArg >> 8) & 0xFF) / 255)),
+                              B((((hexValueArg) & 0xFF) / 255)) {}
+                };
+            }
         }
     }
 
-    namespace Trim {
+    namespace IOManipulators {
+        namespace FileManipulators {
+            bool IsFileDescriptorValid(const int fileDescriptorArg) {
+                return fcntl(fileDescriptorArg, F_GETFD) != -1 || errno != EBADF;
+            }
 
-        // trim from left
-        inline std::string &ltrim(std::string &s, const char *t = " \t\n\r\f\v") {
-            s.erase(0, s.find_first_not_of(t));
-            return s;
-        }
-
-        // trim from right
-        inline std::string &rtrim(std::string &s, const char *t = " \t\n\r\f\v") {
-            s.erase(s.find_last_not_of(t) + 1);
-            return s;
-        }
-
-        // trim from left & right
-        inline std::string &trim(std::string &s, const char *t = " \t\n\r\f\v") {
-            return ltrim(rtrim(s, t), t);
-        }
-
-        // copying versions
-        inline std::string ltrim_copy(std::string s, const char *t = " \t\n\r\f\v") {
-            return ltrim(s, t);
-        }
-
-        inline std::string rtrim_copy(std::string s, const char *t = " \t\n\r\f\v") {
-            return rtrim(s, t);
-        }
-
-        inline std::string trim_copy(std::string s, const char *t = " \t\n\r\f\v") {
-            return trim(s, t);
-        }
-    }
-
-    namespace Occurrence {
-        uint64_t occurrence0(const std::string &text_arg, const char &atCheck_arg) {
-            return std::count(text_arg.begin(), text_arg.end(), atCheck_arg);
-        }
-    }
-}
-
-namespace IntManipulators {
-    namespace Rounds {
-        double RoundX(double valueArg, int decimalPlacesArg = 2) {
-            const double multiplier = std::pow(10.0, decimalPlacesArg);
-            return std::ceil(valueArg * multiplier) / multiplier;
-        }
-    }
-
-    std::string RemoveLeadingZeroPrecision(long double inputArg) {
-        std::ostringstream ostringstream;
-        ostringstream << inputArg;
-        return ostringstream.str();
-    }
-
-    namespace Convertors {
-        std::string ConvertByte(int64_t bytesArg, int decimalPlacesArg = 2) {
-            long gb = 1024 * 1024 * 1024;
-            long mb = 1024 * 1024;
-            long kb = 1024;
-
-            std::string KB{IntManipulators::RemoveLeadingZeroPrecision(
-                    IntManipulators::Rounds::RoundX((double) bytesArg / kb, decimalPlacesArg))};
-            std::string MB{IntManipulators::RemoveLeadingZeroPrecision(
-                    IntManipulators::Rounds::RoundX((double) bytesArg / mb, decimalPlacesArg))};
-            std::string GB{IntManipulators::RemoveLeadingZeroPrecision(
-                    IntManipulators::Rounds::RoundX((double) bytesArg / gb, decimalPlacesArg))};
-            if (bytesArg >= gb) {
-                return GB + " GB";
-            } else if (bytesArg >= mb) {
-                return MB + " MB";
-            } else if (bytesArg >= kb) {
-                return KB + " KB";
-            } else { return std::to_string(bytesArg) + " B"; }
-        }
-    }
-}
-
-namespace IOManipulators {
-    namespace FileManipulators {
-        namespace Attributes {
+            namespace Attributes {
 #ifdef PLATFORM_WINDOWS
 
-            bool SetFilePointerZ(void *fileHandle_arg, uint64_t startAt = 0, uint64_t startFrom = FILE_BEGIN) {
+                bool SetFilePointerZ(void *fileHandle_arg, uint64_t startAt = 0, uint64_t startFrom = FILE_BEGIN) {
                 if (SetFilePointer(fileHandle_arg, startAt, NULL, startFrom) == INVALID_SET_FILE_POINTER) {
                     return false;
                 } else {
@@ -627,66 +723,66 @@ namespace IOManipulators {
             }
 
 #endif
-        }
-        namespace Existence {
-            inline bool CheckExistence0(const std::string &fileName_arg) {
-                std::ifstream f(fileName_arg.c_str());
-                return f.good();
             }
+            namespace Existence {
+                inline bool CheckExistence0(const std::string &fileName_arg) {
+                    std::ifstream f(fileName_arg.c_str());
+                    return f.good();
+                }
 
-            inline bool CheckExistence1(const std::string &fileName_arg) {
-                if (FILE *file = std::fopen(fileName_arg.c_str(), "r")) {
-                    fclose(file);
-                    return true;
-                } else {
-                    return false;
+                inline bool CheckExistence1(const std::string &fileName_arg) {
+                    if (FILE *file = std::fopen(fileName_arg.c_str(), "r")) {
+                        fclose(file);
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+
+                inline bool CheckExistence2(const std::string &fileName_arg) {
+                    return (access(fileName_arg.c_str(), F_OK) != -1);
+                }
+
+                inline bool CheckExistence3(const std::string &fileName_arg) {
+                    struct stat buffer;
+                    return (stat(fileName_arg.c_str(), &buffer) == 0);
+                }
+
+                inline bool CheckExistence4(const std::string &fileName_arg) {
+                    return std::filesystem::exists(fileName_arg);
                 }
             }
 
-            inline bool CheckExistence2(const std::string &fileName_arg) {
-                return (access(fileName_arg.c_str(), F_OK) != -1);
-            }
-
-            inline bool CheckExistence3(const std::string &fileName_arg) {
-                struct stat buffer;
-                return (stat(fileName_arg.c_str(), &buffer) == 0);
-            }
-
-            inline bool CheckExistence4(const std::string &fileName_arg) {
-                return std::filesystem::exists(fileName_arg);
-            }
-        }
-
-        namespace Paths {
-            std::string MakeAbsolutPath(const std::string &filePath_arg = __FILE__) {
-                return std::filesystem::absolute(filePath_arg).string();
-            }
-
-            std::string MakePath(const std::string &fileName_arg) {
-
-                return std::filesystem::current_path().string() + PATH_DELIMITER + fileName_arg;
-            }
-
-            std::string GetCanonicalPath(const std::string &filePath_arg = __FILE__) {
-                return std::filesystem::canonical(filePath_arg).string();
-            }
-
-            std::string GetCurrentPath(void) {
-                return std::filesystem::current_path().string();
-            }
-
-            bool MoveAndRenameFile(const std::string &srcPath_arg, const std::string &dstPath_arg) {
-                try {
-                    std::filesystem::rename(srcPath_arg, dstPath_arg);
-                    return true;
-                } catch (std::filesystem::filesystem_error &filesystemError) {
-                    return false;
+            namespace Paths {
+                std::string MakeAbsolutPath(const std::string &filePath_arg = __FILE__) {
+                    return std::filesystem::absolute(filePath_arg).string();
                 }
-            }
+
+                std::string MakePath(const std::string &fileName_arg) {
+
+                    return std::filesystem::current_path().string() + PATH_DELIMITER + fileName_arg;
+                }
+
+                std::string GetCanonicalPath(const std::string &filePath_arg = __FILE__) {
+                    return std::filesystem::canonical(filePath_arg).string();
+                }
+
+                std::string GetCurrentPath(void) {
+                    return std::filesystem::current_path().string();
+                }
+
+                bool MoveAndRenameFile(const std::string &srcPath_arg, const std::string &dstPath_arg) {
+                    try {
+                        std::filesystem::rename(srcPath_arg, dstPath_arg);
+                        return true;
+                    } catch (std::filesystem::filesystem_error &filesystemError) {
+                        return false;
+                    }
+                }
 
 #ifdef PLATFORM_WINDOWS
 
-            std::string GetCurrentFullPath(void) {
+                std::string GetCurrentFullPath(void) {
                 char currentFullPath[MAX_PATH];
                 GetModuleFileName(NULL, currentFullPath, MAX_PATH);
                 return currentFullPath;
@@ -694,43 +790,43 @@ namespace IOManipulators {
 
 #endif /* IOManipulators::FileManipulators::Paths -> GetCurrentFullPath - [PLATFORM_WINDOWS] */
 
-        }
-        namespace Operations {
-            std::string ReadFromFile(const std::string &fileName_arg) {
-                if (IOManipulators::FileManipulators::Existence::CheckExistence4(fileName_arg)) {
-                    std::ifstream file(fileName_arg, std::ios::in);
+            }
+            namespace Operations {
+                std::string ReadFromFile(const std::string &fileName_arg) {
+                    if (IOManipulators::FileManipulators::Existence::CheckExistence4(fileName_arg)) {
+                        std::ifstream file(fileName_arg, std::ios::in);
+                        if (file.is_open()) {
+                            std::string fileDataHolder;
+                            file >> fileDataHolder;
+                            file.close();
+                            return fileDataHolder;
+                        }
+                    }
+                    return "DOES_NOT_EXISTS";
+                }
+
+                bool
+                WriteToFile(const std::string &fileName_arg, const std::string &data_arg = "", bool asAppendArg = false,
+                            bool asBinary_arg = false) {
+                    std::ofstream file(fileName_arg, std::ios::out);
+                    if (asAppendArg) {
+                        file << std::ios::app;
+                    }
+                    if (asBinary_arg) {
+                        file << std::ios::binary;
+                    }
                     if (file.is_open()) {
-                        std::string fileDataHolder;
-                        file >> fileDataHolder;
+                        file << data_arg;
                         file.close();
-                        return fileDataHolder;
+                        return true;
+                    } else {
+                        return false;
                     }
                 }
-                return "DOES_NOT_EXISTS";
-            }
-
-            bool
-            WriteToFile(const std::string &fileName_arg, const std::string &data_arg = "", bool asAppendArg = false,
-                        bool asBinary_arg = false) {
-                std::ofstream file(fileName_arg, std::ios::out);
-                if (asAppendArg) {
-                    file << std::ios::app;
-                }
-                if (asBinary_arg) {
-                    file << std::ios::binary;
-                }
-                if (file.is_open()) {
-                    file << data_arg;
-                    file.close();
-                    return true;
-                } else {
-                    return false;
-                }
-            }
 
 #ifdef PLATFORM_WINDOWS
 
-            std::pair<uint64_t, BoosterException::InputOutput::InputOutputException>
+                std::pair<uint64_t, BoosterException::InputOutput::InputOutputException>
             GetFileSizeX(void *fileHandle_arg) {
                 std::pair<uint64_t, BoosterException::InputOutput::InputOutputException> returnHolder(0,
                                                                                                       BoosterException::InputOutput::InputOutputException::Success);
@@ -845,27 +941,33 @@ namespace IOManipulators {
                 }
             }
 #endif /* System -> CreateFileRW : GetDiskGeometry : GetDeviceBytesPerSector - [PLATFORM_WINDOWS]  */
+            }
+
+            void CloseFileDescriptor(const int fileDescriptorArg) {
+                if (FileManipulators::IsFileDescriptorValid(fileDescriptorArg)) {
+                    close(fileDescriptorArg);
+                }
+            }
         }
     }
-}
 
-namespace JsonManipulators {
-    rapidjson::Document JsonParse(std::string rawJsonString_arg) {
-        rapidjson::Document jsonDocTemp;
-        jsonDocTemp.Parse(rawJsonString_arg.c_str());
-        return jsonDocTemp;
-    }
+    namespace JsonManipulators {
+        rapidjson::Document JsonParse(std::string rawJsonString_arg) {
+            rapidjson::Document jsonDocTemp;
+            jsonDocTemp.Parse(rawJsonString_arg.c_str());
+            return jsonDocTemp;
+        }
 
-    rapidjson::StringBuffer JsonDocumentToJsonStringBuffer(rapidjson::Document &jsonDocument_arg) {
-        rapidjson::StringBuffer stringBuffer;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(stringBuffer);
-        jsonDocument_arg.Accept(writer);
-        return stringBuffer;
+        rapidjson::StringBuffer JsonDocumentToJsonStringBuffer(rapidjson::Document &jsonDocument_arg) {
+            rapidjson::StringBuffer stringBuffer;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(stringBuffer);
+            jsonDocument_arg.Accept(writer);
+            return stringBuffer;
+        }
     }
-}
 
 #ifdef PLATFORM_WINDOWS
-namespace RegistryManipulators {
+    namespace RegistryManipulators {
     namespace Paths {
         namespace Startup {
             const std::string StartupAlways{R"(SOFTWARE\Microsoft\Windows\CurrentVersion\Run)"};
@@ -1270,8 +1372,8 @@ namespace RegistryManipulators {
         }
     }
 }
-
 #endif /* RegistryManipulators - [PLATFORM_WINDOWS]  */
+}
 
 
 #endif //BOOSTER_HPP
