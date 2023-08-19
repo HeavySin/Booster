@@ -968,10 +968,7 @@ namespace Booster {
         }
 
         std::string JsonDocumentToJsonString(rapidjson::Document &jsonDocumentArg) {
-            rapidjson::StringBuffer stringBuffer;
-            rapidjson::Writer<rapidjson::StringBuffer> writer(stringBuffer);
-            jsonDocumentArg.Accept(writer);
-            return stringBuffer.GetString();
+            return JsonDocumentToJsonStringBuffer(jsonDocumentArg).GetString();
         }
 
         bool IsValidJson(const rapidjson::Document &jsonDocumentArg) {
