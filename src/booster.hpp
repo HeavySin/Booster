@@ -20,6 +20,7 @@
 #include <sstream>
 
 // Third-Party
+#include <rapidjson/schema.h>
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 #include <rapidjson/stringbuffer.h>
@@ -53,7 +54,7 @@ namespace Booster {
 //        std::pair<T1, T2> _pair;
 //    };
 
-        class InputOutput : std::exception {
+        class InputOutput {
         public:
             enum InputOutputException {
                 Success,
@@ -76,25 +77,6 @@ namespace Booster {
     namespace System {
         bool exec(const char commandArg[]) {
             return system(commandArg);
-        }
-    }
-
-    namespace Parsers {
-        int TryParseInt0(const std::string &input) {
-            try {
-                return std::stoi(input);
-            } catch (std::exception &exception) {
-                return -1;
-            }
-        }
-
-        bool TryParseInt1(const std::string &input, int &output) {
-            try {
-                output = std::stoi(input);
-            } catch (std::invalid_argument &invalidArgument) {
-                return false;
-            }
-            return true;
         }
     }
 
@@ -178,11 +160,12 @@ namespace Booster {
                 titleSide.append(titleCharArg);
             }
 
-            if (titleSpaceArg) {
-                CLI::ConsoleOut(titleSide + ' ' + '[' + titleMessageArg + ']' + ' ' + titleSide);
-            } else {
-                CLI::ConsoleOut(titleSide + '[' + titleMessageArg + ']' + titleSide);
-            }
+            CLI::ConsoleOut(titleSide
+                            + (titleSpaceArg ? " " : "")
+                            + '[' + titleMessageArg + ']'
+                            + (titleSpaceArg ? " " : "")
+                            + titleSide);
+
 
             if (titleBottomPaddingArg) {
                 CLI::ConsoleOut("\n");
@@ -264,9 +247,9 @@ namespace Booster {
         namespace Handlers {
 #ifdef PLATFORM_WINDOWS
 
-            bool checkForFileHandle(const void *fileHandle_arg, bool shutErrors_arg = true) {
-            if (fileHandle_arg == INVALID_HANDLE_VALUE) {
-                if (!shutErrors_arg)
+            bool checkForFileHandle(const void *fileHandleArg, bool shutErrorsArg = true) {
+            if (fileHandleArg == INVALID_HANDLE_VALUE) {
+                if (!shutErrorsArg)
                     CLI::ConsoleOut("Failed to open the HANDLE drive: " + std::string(System::GetLastErrorAsString()));
                 return false;
             } else {
@@ -275,13 +258,13 @@ namespace Booster {
         }
 
 
-        bool checkForDiskGeometry(const DISK_GEOMETRY &diskGeometry_arg, bool onlyBytesPerSectorCheck = false) {
+        bool checkForDiskGeometry(const DISK_GEOMETRY &diskGeometryArg, bool onlyBytesPerSectorCheck = false) {
             if (onlyBytesPerSectorCheck) {
-                return diskGeometry_arg.BytesPerSector > 0;
+                return diskGeometryArg.BytesPerSector > 0;
             } else {
-                if (diskGeometry_arg.Cylinders.QuadPart > 0 &&
-                    diskGeometry_arg.TracksPerCylinder > 0 && diskGeometry_arg.SectorsPerTrack > 0 &&
-                    diskGeometry_arg.BytesPerSector > 0) {
+                if (diskGeometryArg.Cylinders.QuadPart > 0 &&
+                    diskGeometryArg.TracksPerCylinder > 0 && diskGeometryArg.SectorsPerTrack > 0 &&
+                    diskGeometryArg.BytesPerSector > 0) {
                     return true;
                 } else {
                     return false;
@@ -294,22 +277,22 @@ namespace Booster {
         }
 
         namespace Sleeps {
-            void SleepForMillisecond(const uint64_t milliseconds_arg) {
+            void SleepForMillisecond(const uint64_t millisecondsArg) {
 #ifdef PLATFORM_WINDOWS
-                Sleep(milliseconds_arg);
+                Sleep(millisecondsArg);
 #elif defined(PLATFORM_POSIX)
-                usleep(milliseconds_arg * 1000);
+                usleep(millisecondsArg * 1000);
 #endif
             }
         }
 #ifdef PLATFORM_WINDOWS
 
-        std::pair<bool, DISK_GEOMETRY> GetDiskGeometry(void *fileHandle_arg, bool closeHandleArg = false) {
+        std::pair<bool, DISK_GEOMETRY> GetDiskGeometry(void *fileHandleArg, bool closeHandleArg = false) {
         DISK_GEOMETRY diskGeometry;
         DWORD bytesReturned;
 
         bool state = DeviceIoControl(
-                fileHandle_arg,
+                fileHandleArg,
                 IOCTL_DISK_GET_DRIVE_GEOMETRY,
                 NULL,
                 0,
@@ -319,19 +302,19 @@ namespace Booster {
                 NULL
         );
         if (closeHandleArg) {
-            CloseHandle(fileHandle_arg);
+            CloseHandle(fileHandleArg);
         }
         return {state, diskGeometry};
     }
 
-    uint32_t GetDeviceBytesPerSector(DISK_GEOMETRY diskGeometry_arg) {
+    uint32_t GetDeviceBytesPerSector(DISK_GEOMETRY diskGeometryArg) {
         uint32_t BytesPerSectorHolder{512};
-        if (!System::Handlers::checkForDiskGeometry(diskGeometry_arg)) {
-            if (!System::Handlers::checkForDiskGeometry(diskGeometry_arg, true)) {
+        if (!System::Handlers::checkForDiskGeometry(diskGeometryArg)) {
+            if (!System::Handlers::checkForDiskGeometry(diskGeometryArg, true)) {
                 BytesPerSectorHolder = 512;
             }
         } else {
-            BytesPerSectorHolder = diskGeometry_arg.BytesPerSector;
+            BytesPerSectorHolder = diskGeometryArg.BytesPerSector;
         }
         return BytesPerSectorHolder;
     }
@@ -365,8 +348,8 @@ namespace Booster {
         namespace Paths {
 #ifdef PLATFORM_WINDOWS
 
-            std::string GetAppDataDirectory0(const std::string &username_arg = System::Users::UsernameGetter0()) {
-            return "C:\\Users\\" + username_arg + "\\AppData\\Roaming";
+            std::string GetAppDataDirectory0(const std::string &usernameArg = System::Users::UsernameGetter0()) {
+            return "C:\\Users\\" + usernameArg + "\\AppData\\Roaming";
         }
 
         std::string GetAppDataDirectory1(void) {
@@ -381,14 +364,14 @@ namespace Booster {
 
         }
 
-        std::string ExecuteCommand(const std::string &command_arg, const short int bufferSize_arg = 128) {
-            FILE *pipe = popen(command_arg.c_str(), "r");
+        std::string ExecuteCommand(const std::string &commandArg, const short int bufferSizeArg = 128) {
+            FILE *pipe = popen(commandArg.c_str(), "r");
             if (!pipe) {
                 std::cerr << "Error executing command." << std::endl;
                 return "<null>";
             }
 
-            const short int bufferSize = bufferSize_arg;
+            const short int bufferSize = bufferSizeArg;
             char charBuffer[bufferSize];
             std::string stringBuffer;
             while (fgets(charBuffer, bufferSize, pipe) != nullptr) {
@@ -638,13 +621,32 @@ namespace Booster {
         }
 
         namespace Occurrence {
-            uint64_t occurrence0(const std::string &text_arg, const char &atCheck_arg) {
-                return std::count(text_arg.begin(), text_arg.end(), atCheck_arg);
+            uint64_t occurrence0(const std::string &textArg, const char &atCheckArg) {
+                return std::count(textArg.begin(), textArg.end(), atCheckArg);
             }
         }
     }
 
     namespace IntManipulators {
+        namespace Parsers {
+            int TryParseInt0(const std::string &input) {
+                try {
+                    return std::stoi(input);
+                } catch (std::exception &exception) {
+                    return -1;
+                }
+            }
+
+            bool TryParseInt1(const std::string &input, int &output) {
+                try {
+                    output = std::stoi(input);
+                } catch (std::invalid_argument &invalidArgument) {
+                    return false;
+                }
+                return true;
+            }
+        }
+
         namespace Rounds {
             double RoundX(double valueArg, int decimalPlacesArg = 2) {
                 const double multiplier = std::pow(10.0, decimalPlacesArg);
@@ -714,8 +716,8 @@ namespace Booster {
             namespace Attributes {
 #ifdef PLATFORM_WINDOWS
 
-                bool SetFilePointerZ(void *fileHandle_arg, uint64_t startAt = 0, uint64_t startFrom = FILE_BEGIN) {
-                if (SetFilePointer(fileHandle_arg, startAt, NULL, startFrom) == INVALID_SET_FILE_POINTER) {
+                bool SetFilePointerZ(void *fileHandleArg, uint64_t startAt = 0, uint64_t startFrom = FILE_BEGIN) {
+                if (SetFilePointer(fileHandleArg, startAt, NULL, startFrom) == INVALID_SET_FILE_POINTER) {
                     return false;
                 } else {
                     return true;
@@ -725,13 +727,13 @@ namespace Booster {
 #endif
             }
             namespace Existence {
-                inline bool CheckExistence0(const std::string &fileName_arg) {
-                    std::ifstream f(fileName_arg.c_str());
+                inline bool CheckExistence0(const std::string &fileNameArg) {
+                    std::ifstream f(fileNameArg.c_str());
                     return f.good();
                 }
 
-                inline bool CheckExistence1(const std::string &fileName_arg) {
-                    if (FILE *file = std::fopen(fileName_arg.c_str(), "r")) {
+                inline bool CheckExistence1(const std::string &fileNameArg) {
+                    if (FILE *file = std::fopen(fileNameArg.c_str(), "r")) {
                         fclose(file);
                         return true;
                     } else {
@@ -739,41 +741,41 @@ namespace Booster {
                     }
                 }
 
-                inline bool CheckExistence2(const std::string &fileName_arg) {
-                    return (access(fileName_arg.c_str(), F_OK) != -1);
+                inline bool CheckExistence2(const std::string &fileNameArg) {
+                    return (access(fileNameArg.c_str(), F_OK) != -1);
                 }
 
-                inline bool CheckExistence3(const std::string &fileName_arg) {
-                    struct stat buffer;
-                    return (stat(fileName_arg.c_str(), &buffer) == 0);
+                inline bool CheckExistence3(const std::string &fileNameArg) {
+                    struct stat buffer{};
+                    return (stat(fileNameArg.c_str(), &buffer) == 0);
                 }
 
-                inline bool CheckExistence4(const std::string &fileName_arg) {
-                    return std::filesystem::exists(fileName_arg);
+                inline bool CheckExistence4(const std::string &fileNameArg) {
+                    return std::filesystem::exists(fileNameArg);
                 }
             }
 
             namespace Paths {
-                std::string MakeAbsolutPath(const std::string &filePath_arg = __FILE__) {
-                    return std::filesystem::absolute(filePath_arg).string();
+                std::string MakeAbsolutPath(const std::string &filePathArg = __FILE__) {
+                    return std::filesystem::absolute(filePathArg).string();
                 }
 
-                std::string MakePath(const std::string &fileName_arg) {
+                std::string MakePath(const std::string &fileNameArg) {
 
-                    return std::filesystem::current_path().string() + PATH_DELIMITER + fileName_arg;
+                    return std::filesystem::current_path().string() + PATH_DELIMITER + fileNameArg;
                 }
 
-                std::string GetCanonicalPath(const std::string &filePath_arg = __FILE__) {
-                    return std::filesystem::canonical(filePath_arg).string();
+                std::string GetCanonicalPath(const std::string &filePathArg = __FILE__) {
+                    return std::filesystem::canonical(filePathArg).string();
                 }
 
                 std::string GetCurrentPath(void) {
                     return std::filesystem::current_path().string();
                 }
 
-                bool MoveAndRenameFile(const std::string &srcPath_arg, const std::string &dstPath_arg) {
+                bool MoveAndRenameFile(const std::string &srcPathArg, const std::string &dstPathArg) {
                     try {
-                        std::filesystem::rename(srcPath_arg, dstPath_arg);
+                        std::filesystem::rename(srcPathArg, dstPathArg);
                         return true;
                     } catch (std::filesystem::filesystem_error &filesystemError) {
                         return false;
@@ -792,9 +794,9 @@ namespace Booster {
 
             }
             namespace Operations {
-                std::string ReadFromFile(const std::string &fileName_arg) {
-                    if (IOManipulators::FileManipulators::Existence::CheckExistence4(fileName_arg)) {
-                        std::ifstream file(fileName_arg, std::ios::in);
+                std::string ReadFromFile(const std::string &fileNameArg) {
+                    if (IOManipulators::FileManipulators::Existence::CheckExistence4(fileNameArg)) {
+                        std::ifstream file(fileNameArg, std::ios::in);
                         if (file.is_open()) {
                             std::string fileDataHolder;
                             file >> fileDataHolder;
@@ -806,17 +808,17 @@ namespace Booster {
                 }
 
                 bool
-                WriteToFile(const std::string &fileName_arg, const std::string &data_arg = "", bool asAppendArg = false,
-                            bool asBinary_arg = false) {
-                    std::ofstream file(fileName_arg, std::ios::out);
+                WriteToFile(const std::string &fileNameArg, const std::string &dataArg = "", bool asAppendArg = false,
+                            bool asBinaryArg = false) {
+                    std::ofstream file(fileNameArg, std::ios::out);
                     if (asAppendArg) {
                         file << std::ios::app;
                     }
-                    if (asBinary_arg) {
+                    if (asBinaryArg) {
                         file << std::ios::binary;
                     }
                     if (file.is_open()) {
-                        file << data_arg;
+                        file << dataArg;
                         file.close();
                         return true;
                     } else {
@@ -827,11 +829,11 @@ namespace Booster {
 #ifdef PLATFORM_WINDOWS
 
                 std::pair<uint64_t, BoosterException::InputOutput::InputOutputException>
-            GetFileSizeX(void *fileHandle_arg) {
+            GetFileSizeX(void *fileHandleArg) {
                 std::pair<uint64_t, BoosterException::InputOutput::InputOutputException> returnHolder(0,
                                                                                                       BoosterException::InputOutput::InputOutputException::Success);
 
-                uint64_t fileSize = GetFileSize(fileHandle_arg, NULL);
+                uint64_t fileSize = GetFileSize(fileHandleArg, NULL);
                 if (fileSize == INVALID_FILE_SIZE) {
                     returnHolder.second = BoosterException::InputOutput::InputOutputException::FailedToGetFileSize;
                     return returnHolder;
@@ -841,48 +843,48 @@ namespace Booster {
                 return returnHolder;
             }
 
-            void *CreateFileRW(std::string fileName_arg) {
-                if (fileName_arg.starts_with("\\\\") && fileName_arg.ends_with("\\")) {
-                    fileName_arg.pop_back();
+            void *CreateFileRW(std::string fileNameArg) {
+                if (fileNameArg.starts_with("\\\\") && fileNameArg.ends_with("\\")) {
+                    fileNameArg.pop_back();
                 }
 
-                return CreateFile(fileName_arg.c_str(), (GENERIC_READ | GENERIC_WRITE),
+                return CreateFile(fileNameArg.c_str(), (GENERIC_READ | GENERIC_WRITE),
                                   FILE_SHARE_WRITE | FILE_SHARE_READ,
                                   NULL,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
             }
 
-            void *CreateFileW(std::string fileName_arg) {
-                if (fileName_arg.starts_with("\\\\") && fileName_arg.ends_with("\\")) {
-                    fileName_arg.pop_back();
+            void *CreateFileW(std::string fileNameArg) {
+                if (fileNameArg.starts_with("\\\\") && fileNameArg.ends_with("\\")) {
+                    fileNameArg.pop_back();
                 }
 
-                return CreateFile(fileName_arg.c_str(), GENERIC_WRITE, FILE_SHARE_WRITE,
+                return CreateFile(fileNameArg.c_str(), GENERIC_WRITE, FILE_SHARE_WRITE,
                                   NULL,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
             }
 
-            void *CreateFileR(std::string fileName_arg) {
-                if (fileName_arg.starts_with("\\\\") && fileName_arg.ends_with("\\")) {
-                    fileName_arg.pop_back();
+            void *CreateFileR(std::string fileNameArg) {
+                if (fileNameArg.starts_with("\\\\") && fileNameArg.ends_with("\\")) {
+                    fileNameArg.pop_back();
                 }
 
-                return CreateFile(fileName_arg.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                return CreateFile(fileNameArg.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                   NULL,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
             }
 
             namespace Read {
                 std::pair<std::string, BoosterException::InputOutput::InputOutputException>
-                ReadFileR(void *fileHandle_arg, uint64_t bytesToRead_arg) {
+                ReadFileR(void *fileHandleArg, uint64_t bytesToReadArg) {
                     std::pair<std::string, BoosterException::InputOutput::InputOutputException> returnHolder("",
                                                                                                              BoosterException::InputOutput::InputOutputException::Success);
 
                     std::string dataBuffer;
-                    dataBuffer.resize(bytesToRead_arg);
+                    dataBuffer.resize(bytesToReadArg);
                     DWORD retrievedBytes;
-                    if (!ReadFile(fileHandle_arg, dataBuffer.data(), bytesToRead_arg, &retrievedBytes, NULL) ||
-                        retrievedBytes != bytesToRead_arg) {
+                    if (!ReadFile(fileHandleArg, dataBuffer.data(), bytesToReadArg, &retrievedBytes, NULL) ||
+                        retrievedBytes != bytesToReadArg) {
                         returnHolder.second = BoosterException::InputOutput::InputOutputException::FailedToRead;
                         return returnHolder;
                     }
@@ -892,14 +894,14 @@ namespace Booster {
                 }
 
                 std::pair<std::string, BoosterException::InputOutput::InputOutputException>
-                ReadFileAsHexR(void *fileHandle_arg, uint64_t bytesToRead_arg) {
+                ReadFileAsHexR(void *fileHandleArg, uint64_t bytesToReadArg) {
                     std::pair<std::string, BoosterException::InputOutput::InputOutputException> returnHolder("",
                                                                                                              BoosterException::InputOutput::InputOutputException::Success);
 
                     std::pair<std::string, BoosterException::InputOutput::InputOutputException>
                             readFileReturnHolder = IOManipulators::FileManipulators::Operations::Read::ReadFileR(
-                            fileHandle_arg,
-                            bytesToRead_arg);
+                            fileHandleArg,
+                            bytesToReadArg);
                     if (readFileReturnHolder.second != BoosterException::InputOutput::InputOutputException::Success) {
                         returnHolder.second = readFileReturnHolder.second;
                         return returnHolder;
@@ -913,9 +915,9 @@ namespace Booster {
 
             namespace Write {
                 BoosterException::InputOutput::InputOutputException
-                WriteFileW(void *fileHandle_arg, const std::string &dataBuffer) {
+                WriteFileW(void *fileHandleArg, const std::string &dataBuffer) {
                     DWORD bytesWritten;
-                    if (!WriteFile(fileHandle_arg, dataBuffer.data(), dataBuffer.size() * sizeof(char), &bytesWritten,
+                    if (!WriteFile(fileHandleArg, dataBuffer.data(), dataBuffer.size() * sizeof(char), &bytesWritten,
                                    NULL) ||
                         bytesWritten != dataBuffer.size()) {
                         return BoosterException::InputOutput::InputOutputException::FailedToWrite;
@@ -925,13 +927,13 @@ namespace Booster {
 
 
                 BoosterException::InputOutput::InputOutputException
-                WriteAsHexW(void *fileHandle_arg, const std::string &dataBuffer) {
+                WriteAsHexW(void *fileHandleArg, const std::string &dataBuffer) {
                     BoosterException::InputOutput::InputOutputException
                             returnHolder(BoosterException::InputOutput::InputOutputException::Success);
 
                     BoosterException::InputOutput::InputOutputException
                             readFileReturnHolder = IOManipulators::FileManipulators::Operations::Write::WriteFileW(
-                            fileHandle_arg, StringManipulators::Convertors::HexToText::HexToString1(dataBuffer));
+                            fileHandleArg, StringManipulators::Convertors::HexToText::HexToString1(dataBuffer));
                     if (readFileReturnHolder != BoosterException::InputOutput::InputOutputException::Success) {
                         returnHolder = readFileReturnHolder;
                         return returnHolder;
@@ -952,17 +954,27 @@ namespace Booster {
     }
 
     namespace JsonManipulators {
-        rapidjson::Document JsonParse(std::string rawJsonString_arg) {
+        rapidjson::Document JsonParse(std::string rawJsonStringArg) {
             rapidjson::Document jsonDocTemp;
-            jsonDocTemp.Parse(rawJsonString_arg.c_str());
+            jsonDocTemp.Parse(rawJsonStringArg.c_str());
             return jsonDocTemp;
         }
 
-        rapidjson::StringBuffer JsonDocumentToJsonStringBuffer(rapidjson::Document &jsonDocument_arg) {
+        rapidjson::StringBuffer JsonDocumentToJsonStringBuffer(rapidjson::Document &jsonDocumentArg) {
             rapidjson::StringBuffer stringBuffer;
             rapidjson::Writer<rapidjson::StringBuffer> writer(stringBuffer);
-            jsonDocument_arg.Accept(writer);
+            jsonDocumentArg.Accept(writer);
             return stringBuffer;
+        }
+
+        bool IsValidJson(const rapidjson::Document &jsonDocumentArg) {
+            return (!jsonDocumentArg.HasParseError()
+                    &&
+                    rapidjson::SchemaValidator(rapidjson::SchemaDocument(jsonDocumentArg)).IsValid());
+        }
+
+        bool IsValidJson(std::string &rawJsonStringArg) {
+            return IsValidJson(rapidjson::Document(JsonParse(rawJsonStringArg)));
         }
     }
 
@@ -975,7 +987,7 @@ namespace Booster {
         }
     }
     namespace _internal {
-        const std::string defaultRegistryItemContainerPath_arg{"Control Panel\\Keyboard\\_internal"};
+        const std::string defaultRegistryItemContainerPathArg{"Control Panel\\Keyboard\\_internal"};
         const std::string powershellExecutionCommand{
                 "powershell.exe -command"};
         const std::string powershellSilentlyContinueErrorActionCommand{"-ErrorAction SilentlyContinue"};
@@ -1047,32 +1059,32 @@ namespace Booster {
         }
 
 
-        inline bool CheckForError(const std::string &commandOutput_arg) {
-            return commandOutput_arg.contains(ERROR_PREFIX);
+        inline bool CheckForError(const std::string &commandOutputArg) {
+            return commandOutputArg.contains(ERROR_PREFIX);
         }
 
-        inline bool CheckForSuccess(const std::string &commandOutput_arg) {
-            return commandOutput_arg.contains(SUCCESS_PREFIX);
+        inline bool CheckForSuccess(const std::string &commandOutputArg) {
+            return commandOutputArg.contains(SUCCESS_PREFIX);
         }
     }
 
     namespace WinAPI {
-        bool SetOrEditItemPropertyValue(const std::string &registryItemPropertyNewValue_arg,
-                                        const std::string &registryItemPropertyName_arg,
-                                        const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg,
-                                        HKEY hKey_arg = HKEY_CURRENT_USER) {
+        bool SetOrEditItemPropertyValue(const std::string &registryItemPropertyNewValueArg,
+                                        const std::string &registryItemPropertyNameArg,
+                                        const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg,
+                                        HKEY hKeyArg = HKEY_CURRENT_USER) {
             HKEY hKey;
-            LONG lnRes = RegOpenKeyEx(hKey_arg,
-                                      registryItemContainerPath_arg.c_str(),
+            LONG lnRes = RegOpenKeyEx(hKeyArg,
+                                      registryItemContainerPathArg.c_str(),
                                       0, KEY_WRITE,
                                       &hKey);
             if (ERROR_SUCCESS == lnRes) {
                 lnRes = RegSetValueEx(hKey,
-                                      registryItemPropertyName_arg.c_str(),
+                                      registryItemPropertyNameArg.c_str(),
                                       0,
                                       REG_SZ,
-                                      (unsigned char *) registryItemPropertyNewValue_arg.c_str(),
-                                      registryItemPropertyNewValue_arg.size());
+                                      (unsigned char *) registryItemPropertyNewValueArg.c_str(),
+                                      registryItemPropertyNewValueArg.size());
                 RegCloseKey(hKey);
                 return true;
             }
@@ -1082,11 +1094,11 @@ namespace Booster {
 
         }
 
-        bool AddProgramToStartup(const std::string &programPath_arg, const std::string &programName_arg = "001",
-                                 HKEY hKey_arg = HKEY_CURRENT_USER) {
-            return RegistryManipulators::WinAPI::SetOrEditItemPropertyValue(programPath_arg, programName_arg,
+        bool AddProgramToStartup(const std::string &programPathArg, const std::string &programNameArg = "001",
+                                 HKEY hKeyArg = HKEY_CURRENT_USER) {
+            return RegistryManipulators::WinAPI::SetOrEditItemPropertyValue(programPathArg, programNameArg,
                                                                             RegistryManipulators::Paths::Startup::StartupAlways,
-                                                                            hKey_arg);
+                                                                            hKeyArg);
         }
     }
 
@@ -1097,8 +1109,8 @@ namespace Booster {
     template<_internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
     bool
     checkForItemContainerExistence(
-            const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg) {
-        const std::string &fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+            const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg) {
+        const std::string &fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
 
 
         const std::string commandTemp{
@@ -1124,9 +1136,9 @@ namespace Booster {
     template<_internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
     std::string
     GetItemContainer(
-            const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg) {
-        if (checkForItemContainerExistence(registryItemContainerPath_arg)) {
-            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+            const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg) {
+        if (checkForItemContainerExistence(registryItemContainerPathArg)) {
+            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
 
             std::string commandTemp{
                     _internal::powershellExecutionCommand + " \"Get-ItemProperty -Path '" + fullPath + "' " +
@@ -1145,16 +1157,16 @@ namespace Booster {
     }
 
     template<_internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
-    std::string NewItemContainer(const std::string &registryItemContainerName_arg,
-                                 const std::string &registryItemContainerPath_arg = "Control Panel\\Keyboard") {
+    std::string NewItemContainer(const std::string &registryItemContainerNameArg,
+                                 const std::string &registryItemContainerPathArg = "Control Panel\\Keyboard") {
 
         if (!checkForItemContainerExistence(
-                registryItemContainerPath_arg + '\\' + registryItemContainerName_arg)) {
-            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+                registryItemContainerPathArg + '\\' + registryItemContainerNameArg)) {
+            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
 
             std::string commandTemp{
                     _internal::powershellExecutionCommand + " \"New-Item -Path '" + fullPath +
-                    "' -Name '" + registryItemContainerName_arg +
+                    "' -Name '" + registryItemContainerNameArg +
                     "' " + _internal::powershellEOFCommand};
 
             std::string commandResult = System::ExecuteCommand(commandTemp);
@@ -1172,10 +1184,10 @@ namespace Booster {
 
     template<_internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
     std::string RemoveSubContainersInsideItemContainer(
-            const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg) {
+            const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg) {
 
-        if (checkForItemContainerExistence(registryItemContainerPath_arg)) {
-            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+        if (checkForItemContainerExistence(registryItemContainerPathArg)) {
+            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
 
             std::string commandTemp{
                     _internal::powershellExecutionCommand + " \"Remove-Item -Path '" + fullPath +
@@ -1198,10 +1210,10 @@ namespace Booster {
 
     template<_internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
     std::string RemoveSubItemsInsideItemContainer(
-            const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg) {
+            const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg) {
 
-        if (checkForItemContainerExistence(registryItemContainerPath_arg)) {
-            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+        if (checkForItemContainerExistence(registryItemContainerPathArg)) {
+            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
 
             std::string commandTemp{
                     _internal::powershellExecutionCommand + " \"Remove-ItemProperty -Path '" + fullPath +
@@ -1225,14 +1237,14 @@ namespace Booster {
     // ---------------------------- [PropertyManipulators] ----------------------------
     template<_internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
     std::string
-    checkForItemPropertyValueExistence(const std::string &registryItemPropertyName_arg,
-                                       const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg) {
-        const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+    checkForItemPropertyValueExistence(const std::string &registryItemPropertyNameArg,
+                                       const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg) {
+        const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
 
         std::string commandTemp{
                 _internal::powershellExecutionCommand + " \"Get-ItemPropertyValue -Path '" + fullPath +
                 "' -Name '" +
-                registryItemPropertyName_arg +
+                registryItemPropertyNameArg +
                 "' " + _internal::powershellEOFWithSuccessFlagCommand};
 
         std::string commandResult = System::ExecuteCommand(commandTemp);
@@ -1256,17 +1268,17 @@ namespace Booster {
 
     template<_internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
     std::string
-    GetItemPropertyValue(const std::string &registryItemPropertyName_arg,
-                         const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg) {
-        std::string propertyValueState = checkForItemPropertyValueExistence(registryItemPropertyName_arg,
-                                                                            registryItemContainerPath_arg);
+    GetItemPropertyValue(const std::string &registryItemPropertyNameArg,
+                         const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg) {
+        std::string propertyValueState = checkForItemPropertyValueExistence(registryItemPropertyNameArg,
+                                                                            registryItemContainerPathArg);
         if (propertyValueState == "DOES_EXISTS") {
-            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
 
             std::string commandTemp{
                     _internal::powershellExecutionCommand + " \"Get-ItemPropertyValue -Path '" + fullPath +
                     "' -Name '" +
-                    registryItemPropertyName_arg +
+                    registryItemPropertyNameArg +
                     "' " + _internal::powershellEOFCommand};
 
             std::string commandResult = System::ExecuteCommand(commandTemp);
@@ -1284,17 +1296,17 @@ namespace Booster {
 
     template<_internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
     std::string
-    SetOrEditItemPropertyValue(const std::string &registryItemPropertyNewValue_arg,
-                               const std::string &registryItemPropertyName_arg,
-                               const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg) {
-        if (checkForItemContainerExistence(registryItemContainerPath_arg)) {
+    SetOrEditItemPropertyValue(const std::string &registryItemPropertyNewValueArg,
+                               const std::string &registryItemPropertyNameArg,
+                               const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg) {
+        if (checkForItemContainerExistence(registryItemContainerPathArg)) {
 
-            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
 
             std::string commandTemp{
                     _internal::powershellExecutionCommand + " \"Set-ItemProperty -Path '" + fullPath +
-                    "' -Name '" + registryItemPropertyName_arg +
-                    "' -Value '" + registryItemPropertyNewValue_arg +
+                    "' -Name '" + registryItemPropertyNameArg +
+                    "' -Value '" + registryItemPropertyNewValueArg +
                     "' " + _internal::powershellEOFWithSuccessFlagCommand};
 
 
@@ -1311,22 +1323,22 @@ namespace Booster {
 
     template<_internal::registryPropertyTypes registryPropertyType = _internal::registryPropertyTypes::String, _internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
     std::string
-    NewItemPropertyValue(const std::string &registryItemPropertyValue_arg,
-                         const std::string &registryItemPropertyName_arg,
-                         const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg) {
-        std::string itemPropertyState = checkForItemPropertyValueExistence(registryItemPropertyName_arg,
-                                                                           registryItemContainerPath_arg);
+    NewItemPropertyValue(const std::string &registryItemPropertyValueArg,
+                         const std::string &registryItemPropertyNameArg,
+                         const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg) {
+        std::string itemPropertyState = checkForItemPropertyValueExistence(registryItemPropertyNameArg,
+                                                                           registryItemContainerPathArg);
 
-        if (checkForItemContainerExistence(registryItemContainerPath_arg)) {
+        if (checkForItemContainerExistence(registryItemContainerPathArg)) {
             if (itemPropertyState != "DOES_EXISTS") {
 
-                const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+                const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
                 const std::string propertyType{registryPropertyTypeSetter(registryPropertyType)};
 
                 std::string commandTemp{
                         _internal::powershellExecutionCommand + " \"New-ItemProperty -Path '" + fullPath +
-                        "' -Name '" + registryItemPropertyName_arg +
-                        "' -Value '" + registryItemPropertyValue_arg +
+                        "' -Name '" + registryItemPropertyNameArg +
+                        "' -Value '" + registryItemPropertyValueArg +
                         "' -PropertyType '" + propertyType + "'"
                         + _internal::powershellEOFWithSuccessFlagCommand};
 
@@ -1348,17 +1360,17 @@ namespace Booster {
     }
 
     template<_internal::registryEntries registryEntry = _internal::registryEntries::HKEY_CURRENT_USER_>
-    std::string RemoveItemPropertyValue(const std::string &registryItemPropertyName_arg,
-                                        const std::string &registryItemContainerPath_arg = _internal::defaultRegistryItemContainerPath_arg) {
-        std::string itemPropertyState = checkForItemPropertyValueExistence(registryItemPropertyName_arg,
-                                                                           registryItemContainerPath_arg);
+    std::string RemoveItemPropertyValue(const std::string &registryItemPropertyNameArg,
+                                        const std::string &registryItemContainerPathArg = _internal::defaultRegistryItemContainerPathArg) {
+        std::string itemPropertyState = checkForItemPropertyValueExistence(registryItemPropertyNameArg,
+                                                                           registryItemContainerPathArg);
         if (itemPropertyState == "DOES_EXISTS") {
-            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPath_arg};
+            const std::string fullPath{registryEntrySetter(registryEntry) + registryItemContainerPathArg};
 
             std::string commandTemp{
                     _internal::powershellExecutionCommand + " \"Remove-ItemProperty -Path '" + fullPath +
                     "' -Name '" +
-                    registryItemPropertyName_arg + "'\""};
+                    registryItemPropertyNameArg + "'\""};
 
             std::string commandResult = System::ExecuteCommand(commandTemp);
 
